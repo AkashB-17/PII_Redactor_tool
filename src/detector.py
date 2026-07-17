@@ -55,34 +55,30 @@ class PIIDetector:
 
     def regex_detect(self, text: str) -> List[DetectedEntity]:
 
-    entities = []
+        entities = []
 
-    for entity_type, pattern in self.patterns.items():
+        for entity_type, pattern in self.patterns.items():
 
-        for match in re.finditer(pattern, text):
+            for match in re.finditer(pattern, text):
 
-            value = match.group()
+                value =match.group()
 
-            # -----------------------------
-            # Extra validation for phone numbers
-            # -----------------------------
-            if entity_type == "PHONE":
+                if entity_type == "PHONE":
+                    digits = re.sub(r"\D", "", value)
 
-                digits = re.sub(r"\D", "", value)
+                    if len(digits) < 10 or len(digits) > 15:
+                        continue
 
-                if len(digits) < 10 or len(digits) > 15:
-                    continue
-
-            entities.append(
-                DetectedEntity(
-                    entity_type=entity_type,
-                    value=value,
-                    start=match.start(),
-                    end=match.end(),
+                entities.append(
+                    DetectedEntity(
+                        entity_type=entity_type,
+                        value=match.group(),
+                        start=match.start(),
+                        end=match.end(),
+                    )
                 )
-            )
 
-    return entities
+        return entities
 
     # ----------------------------------------------------
     # spaCy Detection
@@ -140,4 +136,5 @@ class PIIDetector:
             unique.values(),
             key=lambda entity: entity.start,
         )
+    
     
