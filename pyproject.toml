@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "en-core-web-sm",
     "faker>=40.31.0",
     "gradio>=6.20.0",
     "presidio-analyzer>=2.2.363",
@@ -14,3 +15,6 @@ dependencies = [
     "regex>=2026.7.10",
     "spacy>=3.8.13",
 ]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
