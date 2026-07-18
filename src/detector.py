@@ -87,9 +87,11 @@ class PIIDetector:
         
         # Add generic document terms that spaCy frequently misidentifies
         ignore_list = {
-            "offer for sale", "offer", "dob", "ssn", "pan", 
-            "ticket", "order", "cin", "company"
-        }
+            "red herring prospectus", "offer for sale", "offer", "dob", "ssn", "pan",
+            "ticket", "order", "cin", "company", "bid/offer closing day", "board",
+            "corporate office", "anchor investors", "registrar of companies",
+            "registrar of companies maharashtra"
+}
 
         for ent in doc.ents:
             if ent.label_ in self.spacy_entities:
