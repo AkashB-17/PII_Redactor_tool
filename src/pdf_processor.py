@@ -31,21 +31,26 @@ class PdfProcessor:
                 
             # Generate mappings
             mapping = self.anonymizer.build_mapping(entities)
-            
-            # Find and redact the original text, replacing with fake text
+
+            # Step 1: mark every PII instance for redaction, but don't draw
+            # the replacement text yet -- apply_redactions() strips ALL
+            # content inside a marked rectangle, including anything drawn
+            # there before it runs. Collect (rect, fake_text) pairs instead.
+            pending_overlays = []
             for original_text, fake_text in mapping.items():
-                # Search for the exact coordinates of the PII on the page
                 text_instances = page.search_for(original_text)
-                
                 for inst in text_instances:
-                    # Add redaction annotation (blocks out the original text)
-                    page.add_redact_annot(inst, fill=(0, 0, 0)) # Black box
-                    
-                    # Insert the fake text slightly above the bottom-left of the bounding box
-                    page.insert_text((inst.x0, inst.y1 - 2), fake_text, fontsize=10, color=(1, 1, 1)) 
-            
-            # Apply all redactions to the page
+                    page.add_redact_annot(inst, fill=(0, 0, 0))  # black box
+                    pending_overlays.append((inst, fake_text))
+
+            # Step 2: actually apply the redactions now -- this blanks out
+            # the original PII and paints the black fill.
             page.apply_redactions()
+
+            # Step 3: now that the boxes are blanked, draw the fake text
+            # into them. Anything inserted after this point survives.
+            for inst, fake_text in pending_overlays:
+                page.insert_text((inst.x0, inst.y1 - 2), fake_text, fontsize=10, color=(1, 1, 1))
 
         # Save the new PDF
         doc.save(output_path)

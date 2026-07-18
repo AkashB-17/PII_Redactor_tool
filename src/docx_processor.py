@@ -17,6 +17,7 @@ class DocxProcessor:
     def __init__(self):
         self.detector = PIIDetector()
         self.anonymizer = PIIAnonymizer()
+        self.stats: dict[str, int] = {}
 
     # ----------------------------------------------------
     # Replace helper
@@ -51,6 +52,9 @@ class DocxProcessor:
         if not entities:
             return
 
+        for entity in entities:
+            self.stats[entity.entity_type] = self.stats.get(entity.entity_type, 0) + 1
+
         mapping = self.anonymizer.build_mapping(entities)
         
         # Assign the rebuilt text back to the paragraph
@@ -59,7 +63,8 @@ class DocxProcessor:
     # ----------------------------------------------------
     # Process document
     # ----------------------------------------------------
-    def process(self, input_path: str, output_path: str):
+    def process(self, input_path: str, output_path: str) -> dict[str, int]:
+        self.stats = {}
         document = Document(input_path)
 
         # 1. Process standard paragraphs
@@ -75,3 +80,4 @@ class DocxProcessor:
 
         document.save(output_path)
         print(f"Saved redacted document -> {output_path}")
+        return self.stats
