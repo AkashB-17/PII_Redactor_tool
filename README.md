@@ -1,85 +1,122 @@
-# 🛡️ PII Redaction Tool
+# PII Redaction Tool
 
-A modular **Personally Identifiable Information (PII) Redaction Tool** that automatically detects and anonymizes sensitive information from **DOCX** and **PDF** documents.
+A modular tool for detecting and anonymizing Personally Identifiable Information (PII) in DOCX and PDF documents. It combines regex-based pattern matching for structured PII with spaCy Named Entity Recognition for unstructured PII, and replaces every detected instance with a consistent, realistic fake value via Faker — so a redacted document reads naturally rather than being full of `[REDACTED]` placeholders.
 
-The project combines **Regex-based pattern matching** with **spaCy Named Entity Recognition (NER)** to identify both structured and unstructured PII while maintaining consistent anonymization using **Faker**.
+Built and evaluated against a real-world Red Herring Prospectus (RHP), a dense financial/legal document that exercises PII detection in a genuinely hard setting: mixed paragraph and table layouts, promoter/director tables, registrar and banker contact blocks, and hundreds of pages of legal boilerplate that resembles PII without being PII.
 
 ---
 
-## ✨ Features
+## Table of Contents
 
-- Hybrid PII detection using **Regex + spaCy**
-- Consistent anonymization using **Faker**
-- Supports:
-  - DOCX documents
-  - PDF documents *(in progress / implemented depending on your project status)*
+- [Features](#features)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [CLI / Script Processing](#cli--script-processing)
+  - [Web UI (Streamlit)](#web-ui-streamlit)
+- [Detection Pipeline](#detection-pipeline)
+- [Evaluation](#evaluation)
+- [Known Limitations](#known-limitations)
+- [Deployment](#deployment)
+- [Roadmap](#roadmap)
+
+---
+
+## Features
+
+- Hybrid detection: regex for structured PII, spaCy NER for unstructured PII
+- Consistent anonymization — the same real value maps to the same fake value everywhere it appears in a document
+- Supports both DOCX and PDF input
+- Processes paragraphs **and** table cells (most PII in structured documents lives in tables)
 - Detects:
-  - Full Names
-  - Email Addresses
-  - Phone Numbers
-  - Company Names
-  - Physical Addresses
+  - Full names
+  - Company / organization names
+  - Email addresses
+  - Phone numbers
+  - Physical / mailing addresses (partial — see [Known Limitations](#known-limitations))
   - Social Security Numbers (SSN)
-  - Credit Card Numbers
-  - Date of Birth
-  - IPv4 Addresses
-- Modular architecture
-- Easily extensible for new PII types
+  - PAN and Aadhaar numbers (India-specific identifiers)
+  - Credit card numbers
+  - Dates of birth
+  - IPv4 addresses
+- Modular, easily extensible architecture
+- Scoped evaluation harness with precision/recall/F1 reporting
+- Streamlit web UI for interactive upload → redact → download
 
 ---
 
-# System Architecture
+## Architecture
 
-```text
-                    Input Document
-                   (DOCX / PDF)
-                          │
-                          ▼
-                 Document Processor
-                          │
-                          ▼
-                  Text Extraction
-                          │
-                          ▼
-              Hybrid Detection Engine
-          ┌────────────────────────────┐
-          │ Regex Detector             │
-          │ spaCy Named Entity Model   │
-          └────────────────────────────┘
-                          │
-                          ▼
-             Consistent Anonymization
-                    (Faker Mapping)
-                          │
-                          ▼
-               Document Reconstruction
-                          │
-                          ▼
-                 Redacted Document
+```
+                Input Document
+               (DOCX / PDF)
+                     │
+                     ▼
+            Document Processor
+         (DocxProcessor / PdfProcessor)
+                     │
+                     ▼
+             Text Extraction
+        (paragraphs + table cells)
+                     │
+                     ▼
+         Hybrid Detection Engine
+    ┌─────────────────────────────┐
+    │  Regex Detector              │
+    │  (email, phone, SSN, PAN,    │
+    │   Aadhaar, credit card, IP,  │
+    │   date of birth)             │
+    │                              │
+    │  spaCy NER                   │
+    │  (PERSON, ORG, GPE)          │
+    └─────────────────────────────┘
+                     │
+                     ▼
+        Consistent Anonymization
+       (Faker-backed mapping, keyed
+        by original value)
+                     │
+                     ▼
+         Document Reconstruction
+      (in-place run/text replacement,
+       structure and tables preserved)
+                     │
+                     ▼
+            Redacted Document
 ```
 
 ---
 
-# Project Structure
+## Project Structure
 
-```text
-PII_Redaction_Tool/
+```
+PII_Redactor_tool/
 │
 ├── data/
-│   ├── input/
-│   └── output/
+│   ├── input/              # source documents (gitignored)
+│   └── output/             # redacted documents (gitignored)
 │
 ├── src/
-│   ├── detector.py
-│   ├── anonymizer.py
-│   ├── regex_patterns.py
-│   ├── docx_processor.py
-│   ├── pdf_processor.py
-│   ├── evaluate.py
-│   └── utils.py
+│   ├── detector.py         # hybrid regex + spaCy detection
+│   ├── anonymizer.py       # Faker-backed consistent fake-value mapping
+│   ├── regex_patterns.py   # all structured-PII regex patterns
+│   ├── docx_processor.py   # DOCX read → detect → redact → write
+│   ├── pdf_processor.py    # PDF read → detect → redact → write
+│   ├── evaluate.py         # scoped precision/recall/F1 evaluation
+│   └── utils.py            # shared data model (DetectedEntity)
 │
 ├── tests/
+│   ├── test_detector.py
+│   ├── test_anonymizer.py
+│   ├── test_docx.py
+│   ├── test_pdf.py
+│   └── test_evaluator.py
 │
+├── app.py                  # Streamlit web UI
+├── main.py
+├── requirements.txt         # for platforms that don't read pyproject.toml/uv.lock
+├── render.yaml              # Render deployment blueprint
 ├── pyproject.toml
 ├── uv.lock
 └── README.md
@@ -87,211 +124,154 @@ PII_Redaction_Tool/
 
 ---
 
-# Detection Pipeline
+## Installation
 
-The system follows a hybrid detection approach.
-
-## 1. Regex Detection
-
-Regex is used for deterministic identification of structured PII.
-
-Examples:
-
-- Email Address
-- Phone Number
-- Credit Card Number
-- SSN
-- IPv4 Address
-- Date of Birth
-
-Regex provides high precision for structured patterns.
-
----
-
-## 2. spaCy Named Entity Recognition
-
-spaCy identifies contextual entities such as:
-
-- PERSON
-- ORG
-- GPE
-
-This improves recall for unstructured PII that cannot be reliably detected using regular expressions.
-
----
-
-## 3. Consistent Anonymization
-
-Detected entities are replaced using **Faker**.
-
-Example:
-
-```
-Onkar Bose
-
-↓
-
-John Doe
-```
-
-The same entity is always mapped to the same replacement throughout the document.
-
----
-
-# Installation
-
-Clone the repository
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
 
 ```bash
-git clone https://github.com/<your-username>/PII_Redaction_Tool.git
-
-cd PII_Redaction_Tool
-```
-
-Install dependencies
-
-```bash
+git clone https://github.com/AkashB-17/PII_Redactor_tool.git
+cd PII_Redactor_tool
 uv sync
 ```
 
-Install the spaCy model
+`uv sync` installs all dependencies, including the `en_core_web_sm` spaCy model, which is pinned as a direct wheel URL in `pyproject.toml`.
+
+If you're using plain `pip` instead of `uv` (e.g., on a deployment platform that doesn't support `uv`/`pyproject.toml`):
 
 ```bash
-uv run python -m spacy download en_core_web_sm
+pip install -r requirements.txt
 ```
 
 ---
 
-# Usage
+## Usage
 
-Place your input document inside
+### CLI / Script Processing
 
-```
-data/input/
-```
-
-Run
+Place your input document in `data/input/`, then run:
 
 ```bash
 uv run python -m tests.test_docx
 ```
 
-The redacted document will be generated in
+The redacted document is written to `data/output/`.
+
+### Web UI (Streamlit)
+
+```bash
+uv run streamlit run app.py
+```
+
+Open `http://localhost:8501`, upload a `.docx` or `.pdf`, click **Redact Document**, and download the result directly from the browser. See [Deployment](#deployment) for hosting this publicly.
+
+---
+
+## Detection Pipeline
+
+### 1. Regex Detection — structured PII
+
+Deterministic, pattern-based detection for PII with a fixed format: email, phone number, credit card number (with digit-count guarding), SSN, PAN, Aadhaar, IPv4 address, and date-of-birth-shaped dates. Regex gives high precision on these categories since the format itself is the signal.
+
+### 2. spaCy NER — unstructured PII
+
+`en_core_web_sm` identifies contextual entities that have no fixed pattern:
+
+- `PERSON` → full names
+- `ORG` → company / organization names
+- `GPE` → place names (partial signal toward addresses)
+
+An explicit `ignore_list` in `detector.py` filters out recurring legal/financial boilerplate that spaCy tends to mistag as an organization (e.g., "Board," "Registrar of Companies," "Anchor Investors") — necessarily an incomplete list, since this class of document has a long tail of institution-sounding phrases that aren't real companies.
+
+### 3. Consistent Anonymization
+
+Every detected entity is replaced using Faker, with a persistent mapping from original value → fake value:
 
 ```
-data/output/
+Onkar Bose  →  John Doe
 ```
 
----
-
-# Supported PII Types
-
-| Entity | Detection Method |
-|----------|-----------------|
-| Person Name | spaCy |
-| Organization | spaCy |
-| Email | Regex |
-| Phone Number | Regex |
-| SSN | Regex |
-| Credit Card | Regex |
-| IPv4 Address | Regex |
-| Date of Birth | Regex |
+The same real value always produces the same fake value throughout the document, so a redacted document reads as if it were about one consistent set of fictional people and organizations rather than a different fake identity on every mention.
 
 ---
 
-# Evaluation Methodology
+## Evaluation
 
-This project distinguishes between **offline evaluation** and **production evaluation**.
+Precision and recall for an entity-extraction task are only meaningful when checked against a ground truth that's **exhaustive** for the text being scored. Hand-labeling every PII instance across an entire ~12,000-line document isn't practical, so evaluation is deliberately **scoped**: a specific, fully-labeled set of document blocks (paragraphs/table cells) is chosen, and both the recall check and the false-positive check are restricted to exactly those blocks — false positives are computed by re-running the detector on the scoped text directly, not by diffing against the whole document's replacement mapping.
 
-## Offline Evaluation
+| Metric | Definition |
+|---|---|
+| Precision | TP / (TP + FP) |
+| Recall | TP / (TP + FN) |
+| F1-Score | Harmonic mean of precision and recall |
+| Accuracy (entity-level) | TP / (TP + FP + FN) |
 
-Precision, Recall and F1-score are computed only when a manually annotated ground truth is available.
+Run the evaluation:
 
-Detector predictions are compared against the labeled entities.
+```bash
+uv run python -m tests.test_evaluator
+```
 
-This follows standard Named Entity Recognition (NER) evaluation methodology.
-
----
-
-## Production Evaluation
-
-For arbitrary user-uploaded documents, no labeled ground truth exists.
-
-Therefore, true Precision, Recall and F1-score cannot be computed.
-
-Instead, production systems should report operational metrics such as:
-
-- Total PII entities detected
-- Entity distribution
-- Replacement success rate
-- Leakage count
-- Processing time
-
-This reflects common production monitoring practices for NLP systems.
+See `SUBMISSION.md` for the full evaluation methodology write-up and the results table for this document.
 
 ---
 
-# Trade-offs
+## Known Limitations
 
-## Ground Truth Dependency
-
-Precision, Recall and F1-score require manually labeled data.
-
-They cannot be computed reliably for arbitrary user-uploaded documents.
-
----
-
-## Hybrid Detection
-
-Regex provides high precision for structured entities.
-
-spaCy improves recall for contextual entities but may occasionally over-detect organization names.
+- **Address detection is partial.** Only individual `GPE` place-name tokens are tagged; there is no block-level merge into full contiguous mailing addresses (e.g., anchoring on a 6-digit Indian PIN code and expanding backward to the enclosing address chunk).
+- **spaCy over-detects on legal boilerplate.** Generic institutional phrases ("Board," "Corporate Office," "the Government of India") are occasionally mistagged as `ORG`/`GPE`. The `ignore_list` mitigates this but is not exhaustive.
+- **Phone number regex has no checksum equivalent to Luhn.** Credit card numbers are validated with a Luhn check; phone numbers rely on digit-count heuristics alone, which can occasionally over- or under-match.
+- **Names in unusual formatting may be missed.** All-caps table headers and heavily abbreviated name forms reduce spaCy's contextual signal.
+- **PDF redaction is text-overlay based**, not OCR-aware — scanned/image-only PDFs are out of scope for the current implementation.
 
 ---
 
-## Document Support
+## Deployment
 
-Current implementation focuses on digital DOCX/PDF documents.
+### Streamlit Community Cloud
 
-OCR-based scanned PDFs are outside the current scope.
+1. Ensure `requirements.txt` is present at the repo root (Streamlit Cloud reads this, not `pyproject.toml`/`uv.lock`).
+2. Go to [share.streamlit.io](https://share.streamlit.io) → New app → select this repo, branch `main`, main file `app.py`.
+3. Deploy. First build takes a few minutes due to the spaCy model download.
 
----
+### Render
 
-## Formatting
+A `render.yaml` blueprint is included for one-click setup:
 
-Basic document formatting is preserved where possible.
+```yaml
+services:
+  - type: web
+    name: pii-redactor-tool
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+```
 
-Support for complex objects (text boxes, embedded shapes, SmartArt) can be extended in future versions.
-
----
-
-# Future Improvements
-
-- Microsoft Presidio Integration
-- OCR Support (Tesseract / PaddleOCR)
-- Transformer-based NER Models
-- Confidence Thresholding
-- Human-in-the-loop Review
-- Batch Processing
-- REST API
-- Docker Deployment
-- Audit Logging
-- Secure File Deletion
+Or configure manually via the Render dashboard using the same build/start commands. Note: Render's free tier spins down on inactivity, so the first request after idle time will have a cold-start delay.
 
 ---
 
-# Technologies Used
+## Roadmap
 
-- Python
-- spaCy
-- Faker
-- python-docx
-- PyMuPDF
-- UV
-- Regex
+- Microsoft Presidio integration as an alternative/complementary detection backend
+- OCR support (Tesseract / PaddleOCR) for scanned PDFs
+- Transformer-based NER for improved recall on names and organizations
+- Confidence thresholding and human-in-the-loop review for borderline detections
+- Contiguous address-block extraction
+- REST API and Docker packaging
+- Audit logging and secure temporary-file deletion
 
 ---
 
-# License
+## Tech Stack
 
-This project was developed as part of a technical assessment for automated PII redaction and is intended for educational and evaluation purposes.
+Python · spaCy · Faker · python-docx · PyMuPDF · Streamlit · uv
+
+---
+
+## About
+
+Developed as part of a technical assessment for automated PII redaction. Intended for educational and evaluation purposes.
