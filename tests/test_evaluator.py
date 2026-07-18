@@ -21,6 +21,8 @@ OUTPUT_FILE = "data/output/Red Herring Prospectus_Redacted.docx"
 # ----------------------------------------------------------------------
 SCOPE_BLOCKS = 300 # <-- set this to match how far your labeling actually went
 
+#AutomatedEvaluator.preview_blocks("data/input/Red Herring Prospectus.docx", n=300)
+
 GROUND_TRUTH = [
     "Sarthak Malvadkar", "Kushal Subbayya Hegde", "Pushpa Kushal Hegde",
     "Rajesh Kushal Hegde", "Rohit Kushal Hegde", "Rakhi Girija Shetty", "Sandesh Bhagwat",
